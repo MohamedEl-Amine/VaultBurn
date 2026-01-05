@@ -179,13 +179,56 @@ class SecureDeleteApp(QWidget):
 
 
 if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    
-    def sigint_handler(signum, frame):
-        app.quit()
-    
-    signal.signal(signal.SIGINT, sigint_handler)
-    
-    window = SecureDeleteApp()
-    window.show()
-    sys.exit(app.exec_())
+    if len(sys.argv) > 1:
+        # CLI mode
+        parser = argparse.ArgumentParser(description="Securely delete files.")
+        parser.add_argument('files', nargs='+', help='Files or directories to delete')
+        parser.add_argument('--passes', type=int, default=3, help='Number of overwrite passes (default: 3)')
+        parser.add_argument('--recursive', action='store_true', help='Recursively delete directories')
+        args = parser.parse_args()
+
+        def delete_path(path):
+            if os.path.isfile(path):
+                print(f"Deleting file {path}...")
+                if secure_delete(path, args.passes):
+                    print(f"Successfully deleted {path}")
+                else:
+                    print(f"Failed to delete {path}")
+            elif os.path.isdir(path) and args.recursive:
+                print(f"Deleting directory {path} recursively...")
+                for root, dirs, files in os.walk(path, topdown=False):
+                    for file in files:
+                        file_path = os.path.join(root, file)
+                        print(f"Deleting file {file_path}...")
+                        secure_delete(file_path, args.passes)
+                    for dir in dirs:
+                        dir_path = os.path.join(root, dir)
+                        try:
+                            os.rmdir(dir_path)
+                            print(f"Removed directory {dir_path}")
+                        except OSError:
+                            print(f"Failed to remove directory {dir_path}")
+                try:
+                    os.rmdir(path)
+                    print(f"Successfully deleted directory {path}")
+                except OSError:
+                    print(f"Failed to delete directory {path}")
+            elif os.path.isdir(path):
+                print(f"Skipping directory {path}: use --recursive to delete directories")
+            else:
+                print(f"Path {path} does not exist")
+
+        for path in args.files:
+            delete_path(path)
+    else:
+        # GUI mode
+        app = QApplication(sys.argv)
+        
+        def sigint_handler(signum, frame):
+            app.quit()
+        
+        signal.signal(signal.SIGINT, sigint_handler)
+        
+        window = SecureDeleteApp()
+        window.show()
+        sys.exit(app.exec_())

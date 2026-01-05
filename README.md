@@ -20,11 +20,25 @@ VaultBurn is a secure file deletion application designed to permanently destroy 
 
 ## Usage
 
+### Graphical Interface
 1. Launch the application using `python main.py`.
 2. Use "Add Files" to select individual files for deletion.
 3. Use "Add Directory" to select a directory and add all files within it recursively.
 4. Select files from the list and use "Secure Delete Selected" or "Secure Delete All" to permanently destroy them.
 5. Confirm the deletion in the dialog box.
+
+### Command Line Interface
+VaultBurn also supports command-line usage for scripting and automation:
+
+```bash
+python main.py file1.txt file2.txt --passes 5
+python main.py /path/to/directory --recursive --passes 3
+```
+
+Options:
+- `files`: One or more files or directories to delete
+- `--passes`: Number of overwrite passes (default: 3)
+- `--recursive`: Recursively delete directories and their contents
 
 **Warning:** Deleted files cannot be recovered. Use with caution.
 
