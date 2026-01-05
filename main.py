@@ -7,7 +7,6 @@ from PyQt5.QtWidgets import (
     QMessageBox
 )
 from PyQt5.QtCore import Qt
-from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 
 def human_size(size):
@@ -18,28 +17,16 @@ def human_size(size):
     return f"{size:.2f} PB"
 
 
-def secure_delete(file_path):
+def secure_delete(file_path, passes=3):
     try:
-        with open(file_path, "rb") as f:
-            data = f.read()
-
-        key = AESGCM.generate_key(bit_length=256)
-        aesgcm = AESGCM(key)
-        nonce = os.urandom(12)
-        print(nonce)
-        encrypted = aesgcm.encrypt(nonce, data, None)
-
-        with open(file_path, "wb") as f:
-            f.write(nonce + encrypted)
-            f.flush()
-            os.fsync(f.fileno())
-
-        # os.remove(file_path)
-
-        del key
-        del data
-        del encrypted
-
+        file_size = os.path.getsize(file_path)
+        for _ in range(passes):
+            random_data = os.urandom(file_size)
+            with open(file_path, "wb") as f:
+                f.write(random_data)
+                f.flush()
+                os.fsync(f.fileno())
+        os.remove(file_path)
         return True
     except Exception as e:
         print(f"Error deleting {file_path}: {e}")
@@ -63,12 +50,14 @@ class SecureDeleteApp(QWidget):
         btn_layout = QHBoxLayout()
 
         self.add_btn = QPushButton("Add Files")
+        self.add_dir_btn = QPushButton("Add Directory")
         self.remove_btn = QPushButton("Remove Selected")
         self.clear_btn = QPushButton("Clear All")
         self.delete_selected_btn = QPushButton("Secure Delete Selected")
         self.delete_all_btn = QPushButton("Secure Delete All")
 
         btn_layout.addWidget(self.add_btn)
+        btn_layout.addWidget(self.add_dir_btn)
         btn_layout.addWidget(self.remove_btn)
         btn_layout.addWidget(self.clear_btn)
         btn_layout.addWidget(self.delete_selected_btn)
@@ -77,6 +66,7 @@ class SecureDeleteApp(QWidget):
         self.layout.addLayout(btn_layout)
 
         self.add_btn.clicked.connect(self.add_files)
+        self.add_dir_btn.clicked.connect(self.add_directory)
         self.remove_btn.clicked.connect(self.remove_selected)
         self.clear_btn.clicked.connect(self.clear_all)
         self.delete_selected_btn.clicked.connect(self.delete_selected)
@@ -102,6 +92,30 @@ class SecureDeleteApp(QWidget):
                 self.table.setItem(row, 0, name_item)
                 self.table.setItem(row, 1, size_item)
                 self.table.setItem(row, 2, path_item)
+
+    def add_directory(self):
+        dir_path = QFileDialog.getExistingDirectory(self, "Select Directory")
+        if dir_path:
+            for root, dirs, files in os.walk(dir_path):
+                for file in files:
+                    file_path = os.path.join(root, file)
+                    if not self.is_already_added(file_path):
+                        row = self.table.rowCount()
+                        self.table.insertRow(row)
+
+                        name_item = QTableWidgetItem(os.path.basename(file_path))
+                        size_item = QTableWidgetItem(
+                            human_size(os.path.getsize(file_path))
+                        )
+                        path_item = QTableWidgetItem(file_path)
+
+                        name_item.setFlags(name_item.flags() ^ Qt.ItemIsEditable)
+                        size_item.setFlags(size_item.flags() ^ Qt.ItemIsEditable)
+                        path_item.setFlags(path_item.flags() ^ Qt.ItemIsEditable)
+
+                        self.table.setItem(row, 0, name_item)
+                        self.table.setItem(row, 1, size_item)
+                        self.table.setItem(row, 2, path_item)
 
     def is_already_added(self, path):
         for row in range(self.table.rowCount()):

@@ -1,18 +1,19 @@
 # VaultBurn
 
-VaultBurn is a secure password vault application designed to store and manage your sensitive credentials safely. It uses advanced encryption to protect your data from unauthorized access.
+VaultBurn is a secure file deletion application designed to permanently destroy files and directories by overwriting their data multiple times before deletion. It ensures that sensitive data cannot be recovered using data recovery tools.
 
 ## Features
 
-- Secure storage of passwords and credentials
-- Strong encryption algorithms
-- User-friendly interface
-- Cross-platform compatibility
+- Secure deletion of files with multiple overwrite passes
+- Graphical user interface for easy file selection
+- Support for adding individual files or entire directories recursively
+- Confirmation dialogs to prevent accidental deletion
+- Cross-platform compatibility (Windows, macOS, Linux)
 
 ## Installation
 
 1. Ensure you have Python 3.8 or higher installed.
-2. Clone the repository: `git clone https://github.com/yourusername/vaultburn.git`
+2. Clone the repository: `git clone https://github.com/MohamedEl-Amine/VaultBurn.git`
 3. Navigate to the project directory: `cd vaultburn`
 4. Install dependencies: `pip install -r requirements.txt`
 5. Run the application: `python main.py`
@@ -20,18 +21,16 @@ VaultBurn is a secure password vault application designed to store and manage yo
 ## Usage
 
 1. Launch the application using `python main.py`.
-2. Create a master password to secure your vault.
-3. Add, edit, or delete credentials as needed.
-4. Use the search function to quickly find stored items.
+2. Use "Add Files" to select individual files for deletion.
+3. Use "Add Directory" to select a directory and add all files within it recursively.
+4. Select files from the list and use "Secure Delete Selected" or "Secure Delete All" to permanently destroy them.
+5. Confirm the deletion in the dialog box.
 
-### Command Line Options
-
-- `--help`: Display help information
-- `--version`: Show version number
+**Warning:** Deleted files cannot be recovered. Use with caution.
 
 ## Security
 
-VaultBurn employs industry-standard encryption to protect your data. However, remember that no system is completely secure. Always use strong, unique passwords and keep your master password confidential.
+VaultBurn overwrites file data 3 times with random bytes before deletion, making recovery extremely difficult. However, for highly sensitive data, consider using specialized hardware destruction methods.
 
 ## Contributing
 
@@ -45,7 +44,7 @@ We welcome contributions! Please follow these steps:
 
 ## Disclaimer
 
-This software is provided "as is" without warranty of any kind. The developers are not responsible for any misuse of this application, including but not limited to unauthorized access to systems, data breaches, or any other illegal activities. Users are solely responsible for ensuring their use complies with applicable laws and regulations.
+This software is provided "as is" without warranty of any kind. The developers are not responsible for any misuse of this application, including but not limited to accidental data loss. Users are solely responsible for ensuring their use complies with applicable laws and regulations.
 
 ## License
 
