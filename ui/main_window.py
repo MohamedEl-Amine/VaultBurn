@@ -39,6 +39,8 @@ class SecureDeleteApp(QWidget):
         self.setWindowTitle("VaultBurn - Secure File Deletion System")
         self.setGeometry(100, 100, 1200, 800)
         self.setMinimumSize(900, 600)
+        self.setStyleSheet("background-color: #1e1e2e; color: #e0e0e0;")
+        
         
         # Set window icon
         icon_path = os.path.join(os.path.dirname(__file__), "..", "assets", "icon.ico")
