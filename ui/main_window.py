@@ -623,6 +623,25 @@ class SecureDeleteApp(QWidget):
             QMessageBox.warning(self, "No File", "Please select a file to encrypt first.")
             return
         
+        # Validate file exists and is accessible
+        if not os.path.exists(self.selected_encrypt_file):
+            QMessageBox.critical(
+                self,
+                "❌ File Not Found",
+                f"The selected file no longer exists:\n{self.selected_encrypt_file}",
+                QMessageBox.Ok
+            )
+            return
+        
+        if not os.path.isfile(self.selected_encrypt_file):
+            QMessageBox.critical(
+                self,
+                "❌ Invalid File",
+                f"The selected path is not a file:\n{self.selected_encrypt_file}",
+                QMessageBox.Ok
+            )
+            return
+        
         try:
             # Generate key
             key = generate_key()
@@ -723,6 +742,25 @@ class SecureDeleteApp(QWidget):
             QMessageBox.warning(self, "No File", "Please select an encrypted file first.")
             return
         
+        # Validate file exists and is accessible
+        if not os.path.exists(self.selected_decrypt_file):
+            QMessageBox.critical(
+                self,
+                "❌ File Not Found",
+                f"The selected file no longer exists:\n{self.selected_decrypt_file}",
+                QMessageBox.Ok
+            )
+            return
+        
+        if not os.path.isfile(self.selected_decrypt_file):
+            QMessageBox.critical(
+                self,
+                "❌ Invalid File",
+                f"The selected path is not a file:\n{self.selected_decrypt_file}",
+                QMessageBox.Ok
+            )
+            return
+        
         key_str = self.key_input.text().strip()
         if not key_str:
             QMessageBox.warning(
@@ -733,10 +771,23 @@ class SecureDeleteApp(QWidget):
             )
             return
         
+        # Validate key format
         try:
-            # Convert key string to bytes
             key = key_str.encode('utf-8')
-            
+            # Try to create Fernet object to validate key
+            from cryptography.fernet import Fernet, InvalidToken
+            Fernet(key)  # This will raise ValueError if invalid
+        except (ValueError, TypeError):
+            QMessageBox.critical(
+                self,
+                "❌ Invalid Key",
+                "The entered key is not a valid encryption key.\n\n"
+                "Make sure you copied the exact key from the encryption process.",
+                QMessageBox.Ok
+            )
+            return
+        
+        try:
             # Decrypt file
             decrypted_path = decrypt_file(self.selected_decrypt_file, key)
             
