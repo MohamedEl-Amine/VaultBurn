@@ -3,6 +3,7 @@ VaultBurn - Secure File Deletion Application
 Main entry point for the application.
 """
 import sys
+import signal
 from PyQt5.QtWidgets import QApplication, QSplashScreen
 from PyQt5.QtGui import QIcon, QPixmap
 from PyQt5.QtCore import Qt, QTimer
@@ -20,6 +21,13 @@ def main():
     
     # Create Qt application
     app = QApplication(sys.argv)
+    
+    # Handle SIGINT for graceful shutdown
+    def signal_handler(signum, frame):
+        app.quit()
+    
+    import signal
+    signal.signal(signal.SIGINT, signal_handler)
     
     # Create splash screen
     splash_path = os.path.join(os.path.dirname(__file__), 'assets', 'splashscreen.png')

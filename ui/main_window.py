@@ -37,7 +37,7 @@ class SecureDeleteApp(QWidget):
     def init_ui(self):
         """Initialize the user interface."""
         self.setWindowTitle("VaultBurn - Secure File Deletion System")
-        self.setGeometry(100, 100, 1200, 800)
+        self.setGeometry(100, 100, 1200, 900)
         self.setMinimumSize(900, 600)
         self.setStyleSheet("background-color: #1e1e2e; color: #e0e0e0;")
         
