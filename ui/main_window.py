@@ -41,6 +41,9 @@ class SecureDeleteApp(QWidget):
         self.setMinimumSize(900, 600)
         self.setStyleSheet("background-color: #1e1e2e; color: #e0e0e0;")
         
+        # Center the window on the screen
+        self.center_window()
+        
         
         # Set window icon
         icon_path = os.path.join(os.path.dirname(__file__), "..", "assets", "icon.ico")
@@ -135,6 +138,12 @@ class SecureDeleteApp(QWidget):
         main_layout.setSpacing(0)
         main_layout.addWidget(self.tab_widget)
         self.setLayout(main_layout)
+
+    def center_window(self):
+        """Center the window on the screen."""
+        desktop = QApplication.desktop()
+        screen_rect = desktop.availableGeometry()
+        self.move((screen_rect.width() - self.width()) // 2, (screen_rect.height() - self.height()) // 2)
 
     def setup_main_tab(self):
         """Setup the main file deletion tab."""
