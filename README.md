@@ -165,7 +165,7 @@ flake8 .
 
 ## 📄 License
 
-This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
+This project is licensed under a non-commercial license. Commercial use is strictly prohibited. It is intended for educational and personal use by other users. See the [LICENSE](LICENSE) file for details.
 
 ## 🙏 Acknowledgments
 
