@@ -11,9 +11,9 @@ from PyQt5.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QTableWidget, QTableWidgetItem,
     QTabWidget, QFileDialog, QMessageBox, QHeaderView,
-    QTextEdit, QGroupBox, QLineEdit
+    QTextEdit, QGroupBox, QLineEdit, QProgressBar
 )
-from PyQt5.QtCore import Qt, QMimeData
+from PyQt5.QtCore import Qt, QMimeData, QThread, pyqtSignal
 from PyQt5.QtGui import QFont, QIcon, QDragEnterEvent, QDropEvent
 
 # Import from local modules
@@ -25,6 +25,83 @@ from styles import (
     TITLE_LABEL_STYLE, INFO_LABEL_STYLE, HINT_LABEL_STYLE,
     STATUS_LABEL_READY_STYLE, STATUS_LABEL_ACTIVE_STYLE, COPYRIGHT_LABEL_STYLE
 )
+
+
+class DeleteWorker(QThread):
+    """Worker thread for secure file deletion with progress reporting."""
+    
+    progress = pyqtSignal(int, str)  # progress percentage, current file
+    finished = pyqtSignal(list)  # list of successfully deleted files
+    error = pyqtSignal(str, str)  # error message, file path
+    
+    def __init__(self, file_paths):
+        super().__init__()
+        self.file_paths = file_paths
+    
+    def run(self):
+        """Run the deletion process."""
+        deleted_files = []
+        total = len(self.file_paths)
+        
+        for i, file_path in enumerate(self.file_paths):
+            try:
+                self.progress.emit(int((i / total) * 100), os.path.basename(file_path))
+                success = secure_delete(file_path)
+                if success:
+                    deleted_files.append(file_path)
+                else:
+                    self.error.emit(f"Failed to delete: {file_path}", file_path)
+            except Exception as e:
+                self.error.emit(f"Error deleting {os.path.basename(file_path)}: {str(e)}", file_path)
+            
+            # Update progress
+            self.progress.emit(int(((i + 1) / total) * 100), "")
+        
+        self.finished.emit(deleted_files)
+
+
+class EncryptWorker(QThread):
+    """Worker thread for file encryption."""
+    
+    finished = pyqtSignal(str, bytes)  # encrypted_path, key
+    error = pyqtSignal(str)  # error message
+    
+    def __init__(self, file_path):
+        super().__init__()
+        self.file_path = file_path
+    
+    def run(self):
+        try:
+            key = generate_key()
+            encrypted_path = encrypt_file(self.file_path, key)
+            if encrypted_path:
+                self.finished.emit(encrypted_path, key)
+            else:
+                self.error.emit("Failed to encrypt the file.")
+        except Exception as e:
+            self.error.emit(f"Encryption error: {str(e)}")
+
+
+class DecryptWorker(QThread):
+    """Worker thread for file decryption."""
+    
+    finished = pyqtSignal(str)  # decrypted_path
+    error = pyqtSignal(str)  # error message
+    
+    def __init__(self, file_path, key):
+        super().__init__()
+        self.file_path = file_path
+        self.key = key
+    
+    def run(self):
+        try:
+            decrypted_path = decrypt_file(self.file_path, self.key)
+            if decrypted_path:
+                self.finished.emit(decrypted_path)
+            else:
+                self.error.emit("Failed to decrypt the file.")
+        except Exception as e:
+            self.error.emit(f"Decryption error: {str(e)}")
 
 
 class SecureDeleteApp(QWidget):
@@ -227,6 +304,24 @@ class SecureDeleteApp(QWidget):
         delete_btn_layout.addStretch()
 
         self.layout.addLayout(delete_btn_layout)
+
+        # Progress bar for operations
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setVisible(False)
+        self.progress_bar.setStyleSheet("""
+            QProgressBar {
+                border: 2px solid #3d3d5c;
+                border-radius: 5px;
+                text-align: center;
+                background-color: #2a2a3e;
+                color: #e0e0e0;
+            }
+            QProgressBar::chunk {
+                background-color: #ff6b6b;
+                border-radius: 3px;
+            }
+        """)
+        self.layout.addWidget(self.progress_bar)
 
         # Status bar
         self.status_label = QLabel("Ready | 0 files")
@@ -490,6 +585,24 @@ class SecureDeleteApp(QWidget):
         self.copy_key_btn.clicked.connect(self.copy_key_to_clipboard)
         encrypt_group_layout.addWidget(self.copy_key_btn)
         
+        # Progress bar for encryption
+        self.encrypt_progress = QProgressBar()
+        self.encrypt_progress.setVisible(False)
+        self.encrypt_progress.setStyleSheet("""
+            QProgressBar {
+                border: 2px solid #3d3d5c;
+                border-radius: 5px;
+                text-align: center;
+                background-color: #2a2a3e;
+                color: #e0e0e0;
+            }
+            QProgressBar::chunk {
+                background-color: #27ae60;
+                border-radius: 3px;
+            }
+        """)
+        encrypt_group_layout.addWidget(self.encrypt_progress)
+        
         encrypt_group.setLayout(encrypt_group_layout)
         encrypt_layout.addWidget(encrypt_group)
 
@@ -593,6 +706,24 @@ class SecureDeleteApp(QWidget):
         self.do_decrypt_btn.setEnabled(False)
         decrypt_group_layout.addWidget(self.do_decrypt_btn)
         
+        # Progress bar for decryption
+        self.decrypt_progress = QProgressBar()
+        self.decrypt_progress.setVisible(False)
+        self.decrypt_progress.setStyleSheet("""
+            QProgressBar {
+                border: 2px solid #3d3d5c;
+                border-radius: 5px;
+                text-align: center;
+                background-color: #2a2a3e;
+                color: #e0e0e0;
+            }
+            QProgressBar::chunk {
+                background-color: #f39c12;
+                border-radius: 3px;
+            }
+        """)
+        decrypt_group_layout.addWidget(self.decrypt_progress)
+        
         decrypt_group.setLayout(decrypt_group_layout)
         encrypt_layout.addWidget(decrypt_group)
 
@@ -642,55 +773,66 @@ class SecureDeleteApp(QWidget):
             )
             return
         
-        try:
-            # Generate key
-            key = generate_key()
-            self.current_key = key
-            
-            # Encrypt file
-            encrypted_path = encrypt_file(self.selected_encrypt_file, key)
-            
-            if encrypted_path:
-                # Display key
-                key_str = key.decode('utf-8')
-                self.key_display.setPlainText(key_str)
-                
-                QMessageBox.information(
-                    self,
-                    "✅ Encryption Successful",
-                    f"File encrypted successfully!\n\n"
-                    f"Encrypted file: {os.path.basename(encrypted_path)}\n\n"
-                    f"⚠️ IMPORTANT:\n"
-                    f"1. Copy the encryption key above\n"
-                    f"2. Share both the encrypted file AND the key with your friend\n"
-                    f"3. Keep the key safe - it cannot be recovered!",
-                    QMessageBox.Ok
-                )
-                
-                # Reset
-                self.encrypt_file_label.setText("No file selected")
-                self.encrypt_file_label.setStyleSheet("""
-                    QLabel {
-                        color: #b0b0b0;
-                        padding: 10px;
-                        background-color: #2a2a3e;
-                        border: 2px dashed #5a5a7a;
-                        border-radius: 5px;
-                        font-family: 'Courier New', monospace;
-                    }
-                """)
-                self.do_encrypt_btn.setEnabled(False)
-                self.refresh_logs()
-            else:
-                QMessageBox.critical(
-                    self,
-                    "❌ Encryption Failed",
-                    "Failed to encrypt the file. Check the logs for details.",
-                    QMessageBox.Ok
-                )
-        except Exception as e:
-            QMessageBox.critical(self, "Error", f"Encryption error: {str(e)}")
-            logging.error(f"Encryption error: {e}")
+        # Disable buttons
+        self.select_encrypt_btn.setEnabled(False)
+        self.do_encrypt_btn.setEnabled(False)
+        
+        # Show progress
+        self.encrypt_progress.setVisible(True)
+        self.encrypt_progress.setRange(0, 0)  # Indeterminate
+        
+        # Create worker
+        self.encrypt_worker = EncryptWorker(self.selected_encrypt_file)
+        self.encrypt_worker.finished.connect(self.on_encrypt_finished)
+        self.encrypt_worker.error.connect(self.on_encrypt_error)
+        
+        # Start worker
+        self.encrypt_worker.start()
+
+    def on_encrypt_finished(self, encrypted_path, key):
+        """Handle encryption completion."""
+        self.encrypt_progress.setVisible(False)
+        
+        # Display key
+        key_str = key.decode('utf-8')
+        self.key_display.setPlainText(key_str)
+        self.current_key = key
+        
+        QMessageBox.information(
+            self,
+            "✅ Encryption Successful",
+            f"File encrypted successfully!\n\n"
+            f"Encrypted file: {os.path.basename(encrypted_path)}\n\n"
+            f"⚠️ IMPORTANT:\n"
+            f"1. Copy the encryption key above\n"
+            f"2. Share both the encrypted file AND the key with your friend\n"
+            f"3. Keep the key safe - it cannot be recovered!",
+            QMessageBox.Ok
+        )
+        
+        # Reset
+        self.encrypt_file_label.setText("No file selected")
+        self.encrypt_file_label.setStyleSheet("""
+            QLabel {
+                color: #b0b0b0;
+                padding: 10px;
+                background-color: #2a2a3e;
+                border: 2px dashed #5a5a7a;
+                border-radius: 5px;
+                font-family: 'Courier New', monospace;
+            }
+        """)
+        self.select_encrypt_btn.setEnabled(True)
+        self.do_encrypt_btn.setEnabled(False)
+        self.refresh_logs()
+
+    def on_encrypt_error(self, error_msg):
+        """Handle encryption error."""
+        self.encrypt_progress.setVisible(False)
+        self.select_encrypt_btn.setEnabled(True)
+        self.do_encrypt_btn.setEnabled(True)
+        
+        QMessageBox.critical(self, "Error", error_msg)
 
     def copy_key_to_clipboard(self):
         """Copy encryption key to clipboard."""
@@ -787,56 +929,65 @@ class SecureDeleteApp(QWidget):
             )
             return
         
-        try:
-            # Decrypt file
-            decrypted_path = decrypt_file(self.selected_decrypt_file, key)
-            
-            if decrypted_path:
-                QMessageBox.information(
-                    self,
-                    "✅ Decryption Successful",
-                    f"File decrypted successfully!\n\n"
-                    f"Decrypted file: {os.path.basename(decrypted_path)}\n"
-                    f"Location: {os.path.dirname(decrypted_path)}",
-                    QMessageBox.Ok
-                )
-                
-                # Reset
-                self.decrypt_file_label.setText("No encrypted file selected")
-                self.decrypt_file_label.setStyleSheet("""
-                    QLabel {
-                        color: #b0b0b0;
-                        padding: 10px;
-                        background-color: #2a2a3e;
-                        border: 2px dashed #5a5a7a;
-                        border-radius: 5px;
-                        font-family: 'Courier New', monospace;
-                    }
-                """)
-                self.key_input.clear()
-                self.do_decrypt_btn.setEnabled(False)
-                self.refresh_logs()
-            else:
-                QMessageBox.critical(
-                    self,
-                    "❌ Decryption Failed",
-                    "Failed to decrypt the file.\n\n"
-                    "Possible reasons:\n"
-                    "• Wrong decryption key\n"
-                    "• File is corrupted\n"
-                    "• File is not encrypted\n\n"
-                    "Check the logs for more details.",
-                    QMessageBox.Ok
-                )
-        except Exception as e:
-            QMessageBox.critical(
-                self,
-                "❌ Decryption Error",
-                f"Error decrypting file:\n{str(e)}\n\n"
-                f"Make sure you're using the correct key.",
-                QMessageBox.Ok
-            )
-            logging.error(f"Decryption error: {e}")
+        # Disable buttons
+        self.select_decrypt_btn.setEnabled(False)
+        self.do_decrypt_btn.setEnabled(False)
+        
+        # Show progress
+        self.decrypt_progress.setVisible(True)
+        self.decrypt_progress.setRange(0, 0)  # Indeterminate
+        
+        # Create worker
+        self.decrypt_worker = DecryptWorker(self.selected_decrypt_file, key)
+        self.decrypt_worker.finished.connect(self.on_decrypt_finished)
+        self.decrypt_worker.error.connect(self.on_decrypt_error)
+        
+        # Start worker
+        self.decrypt_worker.start()
+
+    def on_decrypt_finished(self, decrypted_path):
+        """Handle decryption completion."""
+        self.decrypt_progress.setVisible(False)
+        
+        QMessageBox.information(
+            self,
+            "✅ Decryption Successful",
+            f"File decrypted successfully!\n\n"
+            f"Decrypted file: {os.path.basename(decrypted_path)}\n"
+            f"Location: {os.path.dirname(decrypted_path)}",
+            QMessageBox.Ok
+        )
+        
+        # Reset
+        self.decrypt_file_label.setText("No encrypted file selected")
+        self.decrypt_file_label.setStyleSheet("""
+            QLabel {
+                color: #b0b0b0;
+                padding: 10px;
+                background-color: #2a2a3e;
+                border: 2px dashed #5a5a7a;
+                border-radius: 5px;
+                font-family: 'Courier New', monospace;
+            }
+        """)
+        self.key_input.clear()
+        self.select_decrypt_btn.setEnabled(True)
+        self.do_decrypt_btn.setEnabled(False)
+        self.refresh_logs()
+
+    def on_decrypt_error(self, error_msg):
+        """Handle decryption error."""
+        self.decrypt_progress.setVisible(False)
+        self.select_decrypt_btn.setEnabled(True)
+        self.do_decrypt_btn.setEnabled(True)
+        
+        QMessageBox.critical(
+            self,
+            "❌ Decryption Error",
+            f"{error_msg}\n\n"
+            f"Make sure you're using the correct key.",
+            QMessageBox.Ok
+        )
         
     def dragEnterEvent(self, event: QDragEnterEvent):
         """Handle drag enter events for file/folder drops."""
@@ -1073,22 +1224,92 @@ class SecureDeleteApp(QWidget):
         if msg_box.exec_() != QMessageBox.Yes:
             return
 
+        # Get selected file paths
+        file_paths = []
         for row in rows:
             path = self.table.item(row, 2).text()
-            secure_delete(path)
+            file_paths.append(path)
+
+        # Start deletion with progress
+        self.start_deletion(file_paths, rows)
+
+    def start_deletion(self, file_paths, rows_to_remove):
+        """Start the deletion process with progress bar."""
+        # Disable buttons during operation
+        self.disable_buttons()
+        
+        # Show progress bar
+        self.progress_bar.setVisible(True)
+        self.progress_bar.setValue(0)
+        self.progress_bar.setFormat("Preparing deletion...")
+        
+        # Create worker
+        self.delete_worker = DeleteWorker(file_paths)
+        self.delete_worker.progress.connect(self.update_progress)
+        self.delete_worker.finished.connect(lambda deleted: self.on_deletion_finished(deleted, rows_to_remove))
+        self.delete_worker.error.connect(self.on_deletion_error)
+        
+        # Start worker
+        self.delete_worker.start()
+
+    def update_progress(self, percentage, current_file):
+        """Update the progress bar."""
+        self.progress_bar.setValue(percentage)
+        if current_file:
+            self.progress_bar.setFormat(f"Deleting: {current_file} ({percentage}%)")
+        else:
+            self.progress_bar.setFormat(f"Completing... ({percentage}%)")
+
+    def on_deletion_finished(self, deleted_files, rows_to_remove):
+        """Handle deletion completion."""
+        # Hide progress bar
+        self.progress_bar.setVisible(False)
+        
+        # Remove rows from table
+        for row in sorted(rows_to_remove, reverse=True):
             self.table.removeRow(row)
         
         self.update_status()
         
+        # Re-enable buttons
+        self.enable_buttons()
+        
         QMessageBox.information(
             self,
             "✅ Deletion Complete",
-            f"Successfully deleted {len(rows)} file(s).",
+            f"Successfully deleted {len(deleted_files)} file(s).",
             QMessageBox.Ok
         )
         
-        # Refresh logs to show the deletion activity
+        # Refresh logs
         self.refresh_logs()
+
+    def on_deletion_error(self, error_msg, file_path):
+        """Handle deletion errors."""
+        QMessageBox.warning(
+            self,
+            "⚠️ Deletion Warning",
+            f"{error_msg}\n\nThe operation will continue with remaining files.",
+            QMessageBox.Ok
+        )
+
+    def disable_buttons(self):
+        """Disable all buttons during operation."""
+        self.add_btn.setEnabled(False)
+        self.add_dir_btn.setEnabled(False)
+        self.remove_btn.setEnabled(False)
+        self.clear_btn.setEnabled(False)
+        self.delete_selected_btn.setEnabled(False)
+        self.delete_all_btn.setEnabled(False)
+
+    def enable_buttons(self):
+        """Re-enable buttons after operation."""
+        self.add_btn.setEnabled(True)
+        self.add_dir_btn.setEnabled(True)
+        self.remove_btn.setEnabled(True)
+        self.clear_btn.setEnabled(True)
+        self.delete_selected_btn.setEnabled(True)
+        self.delete_all_btn.setEnabled(True)
 
     def delete_all(self):
         """Securely delete all files in the list."""
@@ -1131,20 +1352,14 @@ class SecureDeleteApp(QWidget):
         if msg_box.exec_() != QMessageBox.Yes:
             return
 
+        # Get all file paths
+        file_paths = []
+        rows_to_remove = []
         count = self.table.rowCount()
-        for row in reversed(range(count)):
+        for row in range(count):
             path = self.table.item(row, 2).text()
-            secure_delete(path)
-            self.table.removeRow(row)
-        
-        self.update_status()
-        
-        QMessageBox.information(
-            self,
-            "✅ Deletion Complete",
-            f"Successfully deleted all {count} file(s).",
-            QMessageBox.Ok
-        )
-        
-        # Refresh logs to show the deletion activity
-        self.refresh_logs()
+            file_paths.append(path)
+            rows_to_remove.append(row)
+
+        # Start deletion with progress
+        self.start_deletion(file_paths, rows_to_remove)
